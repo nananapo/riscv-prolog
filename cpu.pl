@@ -53,6 +53,10 @@ fetch(Stack, Rip, Inst) :-
 	write("Fetch Stage----"),nl,
 	subseq(Stack, N1, Next, Inst).
 
+id_rs_value(Regs, [R0,R1,R2,R3,R4], R_addr, Value) :-
+	bin2decimal([R0,R1,R2,R3,R4], R_addr),
+	getreg(Regs, R_addr, Value).
+
 execute(Inst, _, Rip, NextRip, Regs, NextRegs) :-
 	Rip >= 0,
 	write("Execute Stage--"),nl,
@@ -68,14 +72,12 @@ inst_add([
 		Rd_0,Rd_1,Rd_2,Rd_3,Rd_4,
 		0,1,1,0,0,
 		1,1], Regs, RegsNew) :-
-	bin2decimal([Rs2_0,Rs2_1,Rs2_2,Rs2_3,Rs2_4], Rs2),
-	bin2decimal([Rs1_0,Rs1_1,Rs1_2,Rs1_3,Rs1_4], Rs1),
-	bin2decimal([Rd_0,Rd_1,Rd_2,Rd_3,Rd_4], Rd),
-	getreg(Regs, Rs2, VRs2),
-	getreg(Regs, Rs1, VRs1),
-	Result is VRs1 + VRs2,
-	write("Add(rs2,rs1,rd) : "),write(Rs2),write(","),write(Rs1),write(","),write(Rd),nl,
-	setreg(Regs, Rd, Result, RegsNew).
+	id_rs_value(Regs, [Rs2_0,Rs2_1,Rs2_2,Rs2_3,Rs2_4], Rs2_addr, Rs2_data),
+	id_rs_value(Regs, [Rs1_0,Rs1_1,Rs1_2,Rs1_3,Rs1_4], Rs1_addr, Rs1_data),
+	id_rs_value(Regs, [Rd_0,Rd_1,Rd_2,Rd_3,Rd_4], Rd_addr, _),
+	Result is Rs1_data + Rs2_data,
+	write("add(rs2,rs1,rd) : "),write(Rs2_addr),write(","),write(Rs1_addr),write(","),write(Rd_addr),nl,
+	setreg(Regs, Rd_addr, Result, RegsNew).
 
 #riscv(_, 32, _) :- write("end"), nl.
 riscv(Stack, Rip, Regs) :-
