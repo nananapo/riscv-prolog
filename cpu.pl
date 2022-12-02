@@ -45,6 +45,12 @@ bin2decimal([A|Z], R) :-
 	bin2decimal(Z, R2),
 	R is A + R2 * 2.
 
+bit2byte(Bit, Byte) :-
+	Byte is Bit / 8.
+
+byte2bit(Byte, Bit) :-
+	Bit is Byte * 8.
+
 fetch(_, RIP, []) :- RIP < 0.
 fetch(Stack, Rip, Inst) :-
 	Rip >= 0,
@@ -57,15 +63,25 @@ id_rs_value(Regs, [R0,R1,R2,R3,R4], R_addr, Value) :-
 	bin2decimal([R0,R1,R2,R3,R4], R_addr),
 	getreg(Regs, R_addr, Value).
 
-execute_inst(Inst, Regs, NextRegs) :-
-	inst_add(Inst, Regs, NextRegs);
-	inst_sub(Inst, Regs, NextRegs).
+execute_inst(Inst, Stack, NextStack, Regs, NextRegs) :-
+	inst_add(Inst, Stack, NextStack, Regs, NextRegs);
+	inst_sub(Inst, Stack, NextStack, Regs, NextRegs);
+	inst_ld(Inst, Stack, NextStack, Regs, NextRegs).
 
-execute(Inst, _, Rip, NextRip, Regs, NextRegs) :-
+
+execute(Inst, Stack, NextStack, Rip, NextRip, Regs, NextRegs) :-
 	Rip >= 0,
 	write("Execute Stage--"),nl,
-	NextRip is Rip + 32,
-	execute_inst(Inst, Regs, NextRegs).
+	execute_inst(Inst, Stack, NextStack, Regs, NextRegs),
+	NextRip is Rip + 32.
+
+load64bit(Stack, Addr, Data) :-
+	Addr  >= 0,
+	byte2bit(Addr, AddrBit),
+	AddrS is AddrBit + 1,
+	AddrE is AddrBit + 64,
+	subseq(Stack, AddrS, AddrE, DataBit),
+	bin2decimal(DataBit, Data).
 
 inst_add([
 		0,0,0,0,0,
@@ -75,7 +91,7 @@ inst_add([
 		0,0,0,
 		Rd_4,Rd_3,Rd_2,Rd_1,Rd_0,
 		0,1,1,0,0,
-		1,1], Regs, RegsNew) :-
+		1,1], Stack, Stack, Regs, RegsNew) :-
 	id_rs_value(Regs, [Rs2_0,Rs2_1,Rs2_2,Rs2_3,Rs2_4], Rs2_addr, Rs2_data),
 	id_rs_value(Regs, [Rs1_0,Rs1_1,Rs1_2,Rs1_3,Rs1_4], Rs1_addr, Rs1_data),
 	id_rs_value(Regs, [Rd_0,Rd_1,Rd_2,Rd_3,Rd_4], Rd_addr, _),
@@ -92,7 +108,7 @@ inst_sub([
 		0,0,0,
 		Rd_4,Rd_3,Rd_2,Rd_1,Rd_0,
 		0,1,1,0,0,
-		1,1], Regs, RegsNew) :-
+		1,1], Stack, Stack, Regs, RegsNew) :-
 	id_rs_value(Regs, [Rs2_0,Rs2_1,Rs2_2,Rs2_3,Rs2_4], Rs2_addr, Rs2_data),
 	id_rs_value(Regs, [Rs1_0,Rs1_1,Rs1_2,Rs1_3,Rs1_4], Rs1_addr, Rs1_data),
 	id_rs_value(Regs, [Rd_0,Rd_1,Rd_2,Rd_3,Rd_4], Rd_addr, _),
@@ -101,13 +117,31 @@ inst_sub([
 	write(Rs1_data),write(","),write(Rs2_data),write(","),write(Rd_addr),nl,
 	setreg(Regs, Rd_addr, Result, RegsNew).
 
+inst_ld([
+		O_11,O_10,O_9,O_8,O_7,O_6,O_5,O_4,O_3,O_2,O_1,O_0,
+		Rs1_4,Rs1_3,Rs1_2,Rs1_1,Rs1_0,
+		0,1,1,
+		Rd_4,Rd_3,Rd_2,Rd_1,Rd_0,
+		0,0,0,0,0,
+		1,1], Stack, Stack, Regs, RegsNew) :-
+	id_rs_value(Regs, [Rs1_0,Rs1_1,Rs1_2,Rs1_3,Rs1_4], _, Rs1_data),
+	id_rs_value(Regs, [Rd_0,Rd_1,Rd_2,Rd_3,Rd_4], Rd_addr, _),
+	bin2decimal([O_0,O_1,O_2,O_3,O_4,O_5,O_6,O_7,O_8,O_9,O_10,O_11], Offset),
+	Addr is Offset + Rs1_data,
+	write("ld(rs1_data, rd, offset) : "),write(Rs1_data),write(","),write(Rd_addr),write(","),write(Offset),nl,
+	load64bit(Stack, Addr, Data),
+	write("ld(data) : "),write(Data),nl,
+	setreg(Regs, Rd_addr, Data, RegsNew).
+		
+
 #riscv(_, 32, _) :- write("end"), nl.
 riscv(Stack, Rip, Regs) :-
 	fetch(Stack, Rip, Inst),
 	write("Inst : "),write(Inst),nl,
-	execute(Inst, Stack, Rip, NextRip, Regs, NextRegs),
+	execute(Inst, Stack, NextStack, Rip, NextRip, Regs, NextRegs),
 	write("Result---------"),nl,
 	write("regs  : "),write(NextRegs),nl,
 	write("pc_reg: "),write(NextRip),nl,
-	riscv(Stack, NextRip, NextRegs).
+	write("stack : "),write(NextStack),nl,
+	riscv(NextStack, NextRip, NextRegs).
 

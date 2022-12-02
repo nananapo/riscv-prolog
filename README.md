@@ -33,5 +33,6 @@ false.
 
 ## Instructions
 
-* Add
-* Sub
+* add
+* sub
+* ld (not sext)
